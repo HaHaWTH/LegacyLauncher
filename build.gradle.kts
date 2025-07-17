@@ -3,7 +3,6 @@ plugins {
   id("java-library")
   id("com.palantir.git-version") version "0.15.0"
   id("maven-publish")
-  id("com.diffplug.spotless") version "6.12.0"
 }
 
 java {
@@ -22,23 +21,6 @@ repositories {
     metadataSources { artifact() }
   }
   mavenCentral()
-}
-
-spotless {
-  encoding("UTF-8")
-  java {
-    toggleOffOn()
-    importOrder()
-    removeUnusedImports()
-    palantirJavaFormat("1.1.0")
-  }
-  kotlinGradle {
-    toggleOffOn()
-    ktfmt("0.39")
-    trimTrailingWhitespace()
-    indentWithSpaces(4)
-    endWithNewline()
-  }
 }
 
 dependencies {

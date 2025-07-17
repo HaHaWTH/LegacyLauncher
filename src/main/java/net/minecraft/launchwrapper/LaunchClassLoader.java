@@ -1,6 +1,7 @@
 package net.minecraft.launchwrapper;
 
 import java.io.*;
+import java.lang.reflect.Method;
 import java.net.JarURLConnection;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -51,6 +52,29 @@ public class LaunchClassLoader extends URLClassLoader {
     private static final boolean DEBUG_SLIM =
             DEBUG && Boolean.parseBoolean(System.getProperty("legacy.debugClassLoadingSlim", "false"));
     private static File tempFolder = null;
+    // HybridFix start - Allow child loading
+    private final List<ClassLoader> children = new ArrayList<>();
+    private ClassLoader from = null;
+    private static final Method MD_FIND_CLASS;
+    public static boolean childLoadingEnabled = false;
+
+    static {
+        Method mdFind = null;
+        try {
+            mdFind = ClassLoader.class.getDeclaredMethod("findClass", String.class);
+            try {
+                mdFind.setAccessible(true);
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignored) {
+        }
+        MD_FIND_CLASS = mdFind;
+    }
+
+    public void addChild(ClassLoader child) {
+        children.add(child);
+    }
+    // HybridFix end - Allow child loading
 
     public LaunchClassLoader(URL[] sources) {
         super(sources, null);
@@ -110,6 +134,7 @@ public class LaunchClassLoader extends URLClassLoader {
 
     @Override
     public Class<?> findClass(final String name) throws ClassNotFoundException {
+        if (this.equals(from)) return null; // HybridFix - Allow child loading - prevent infinite loop
         if (invalidClasses.contains(name)) {
             throw new ClassNotFoundException(name);
         }
@@ -214,7 +239,29 @@ public class LaunchClassLoader extends URLClassLoader {
             cachedClasses.put(transformedName, clazz);
             return clazz;
         } catch (Throwable e) {
-            invalidClasses.add(name);
+            // HybridFix start - Allow child loading
+            boolean hasChildren = !children.isEmpty();
+            if (childLoadingEnabled && hasChildren) {
+                from = this;
+                for (ClassLoader child : children) {
+                    final String transformedName = transformName(name);
+
+                    try {
+                        Class<?> classe = (Class<?>) MD_FIND_CLASS.invoke(child, transformedName);
+                        if (classe != null) {
+                            cachedClasses.put(name, classe);
+                            from = null;
+                            return classe;
+                        }
+                    } catch (Exception e1) {
+                        from = null;
+                    }
+
+                }
+                from = null;
+            }
+            if (childLoadingEnabled || !hasChildren) invalidClasses.add(name);
+            // HybridFix end - Allow child loading
             if (DEBUG) {
                 LogWrapper.log(Level.TRACE, e, "Exception encountered attempting classloading of " + name);
                 LogManager.getLogger("LaunchWrapper")
