@@ -34,11 +34,9 @@ dependencies {
   api("org.apache.logging.log4j:log4j-api:2.0-beta9-fixed")
 }
 
-val gitVersion: groovy.lang.Closure<String> by extra
-
 group = "net.minecraft"
 
-version = gitVersion()
+version = "1.12"
 
 publishing {
   publications { create<MavenPublication>("launchwrapper") { from(components["java"]) } }
