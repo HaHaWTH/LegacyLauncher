@@ -113,6 +113,40 @@ public class LaunchClassLoader extends URLClassLoader {
         }
     }
 
+    // HybridFix start - Scan plugins for mixin support
+    private final Map<String, File> pluginClass2JarMap = new ConcurrentHashMap<>();
+    private volatile boolean pluginsScanned = false;
+
+    private void scanPlugins() {
+        if (pluginsScanned) return;
+        synchronized (pluginClass2JarMap) {
+            if (pluginsScanned) return;
+            File pluginDir = new File(Launch.minecraftHome, "plugins");
+            if (pluginDir.exists() && pluginDir.isDirectory()) {
+                File[] jars = pluginDir.listFiles((dir, name) -> name.toLowerCase(Locale.ROOT).endsWith(".jar"));
+                if (jars != null) {
+                    for (File jar : jars) {
+                        try (JarFile jf = new JarFile(jar)) {
+                            if (jf.getEntry("plugin.yml") == null) {
+                                continue;
+                            }
+                            jf.stream().forEach(entry -> {
+                                if (entry.getName().endsWith(".class")) {
+                                    String path = entry.getName();
+                                    String className = path.substring(0, path.length() - 6).replace('/', '.');
+                                    pluginClass2JarMap.putIfAbsent(className, jar);
+                                }
+                            });
+                        } catch (Exception ignored) {
+                        }
+                    }
+                }
+            }
+            pluginsScanned = true;
+        }
+    }
+    // HybridFix end - Scan plugins for mixin support
+
     public void registerTransformer(String transformerClassName) {
         try {
             IClassTransformer transformer = (IClassTransformer)
@@ -176,6 +210,15 @@ public class LaunchClassLoader extends URLClassLoader {
             URLConnection urlConnection = findCodeSourceConnectionFor(fileName);
 
             CodeSigner[] signers = null;
+
+            // HybridFix start - Scan plugins for mixin support
+            if (urlConnection == null) {
+                scanPlugins();
+                if (pluginClass2JarMap.containsKey(untransformedName)) {
+                    throw new ClassNotFoundException(name);
+                }
+            }
+            // HybridFix end - Scan plugins for mixin support
 
             if (lastDot > -1 && !untransformedName.startsWith("net.minecraft.")) {
                 if (urlConnection instanceof JarURLConnection) {
@@ -502,6 +545,26 @@ public class LaunchClassLoader extends URLClassLoader {
             final URL classResource = findResource(resourcePath);
 
             if (classResource == null) {
+                // HybridFix start - Scan plugins for mixin support
+                scanPlugins();
+                File pluginJar = pluginClass2JarMap.get(name);
+                if (pluginJar != null) {
+                    InputStream jarStream = null;
+                    try (JarFile jf = new JarFile(pluginJar)) {
+                        JarEntry entry = jf.getJarEntry(name.replace('.', '/') + ".class");
+                        if (entry != null) {
+                            jarStream = jf.getInputStream(entry);
+                            final byte[] data = readFully(jarStream);
+                            resourceCache.put(name, data);
+                            if (DEBUG) LogWrapper.log(Level.DEBUG, "Loaded plugin bytes for Mixin: %s from %s", name, pluginJar.getName());
+                            return data;
+                        }
+                    } catch (Exception ignored) {
+                    } finally {
+                        closeSilently(jarStream);
+                    }
+                }
+                // HybridFix end - Scan plugins for mixin support
                 if (DEBUG) LogWrapper.finest("Failed to find class resource {}", resourcePath);
                 negativeResourceCache.add(name);
                 return null;
