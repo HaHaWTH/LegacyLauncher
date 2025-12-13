@@ -123,7 +123,7 @@ public class LaunchClassLoader extends URLClassLoader {
             if (pluginsScanned) return;
             File pluginDir = new File(Launch.minecraftHome, "plugins");
             if (pluginDir.exists() && pluginDir.isDirectory()) {
-                File[] jars = pluginDir.listFiles((dir, name) -> name.toLowerCase(Locale.ROOT).endsWith(".jar"));
+                File[] jars = pluginDir.listFiles((dir, name) -> dir.isFile() && name.toLowerCase(Locale.ROOT).endsWith(".jar"));
                 if (jars != null) {
                     for (File jar : jars) {
                         try (JarFile jf = new JarFile(jar)) {
