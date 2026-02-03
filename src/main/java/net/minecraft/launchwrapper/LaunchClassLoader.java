@@ -54,7 +54,7 @@ public class LaunchClassLoader extends URLClassLoader {
     private static File tempFolder = null;
     // HybridFix start - Allow child loading
     private final List<ClassLoader> children = new ArrayList<>();
-    private ClassLoader from = null;
+    private final ThreadLocal<ClassLoader> from = new ThreadLocal<>();
     private static final Method MD_FIND_CLASS;
     public static boolean childLoadingEnabled = false;
 
@@ -168,7 +168,7 @@ public class LaunchClassLoader extends URLClassLoader {
 
     @Override
     public Class<?> findClass(final String name) throws ClassNotFoundException {
-        if (this.equals(from)) return null; // HybridFix - Allow child loading - prevent infinite loop
+        if (this.equals(from.get())) return null; // HybridFix - Allow child loading - prevent infinite loop
         if (invalidClasses.contains(name)) {
             throw new ClassNotFoundException(name);
         }
@@ -285,23 +285,22 @@ public class LaunchClassLoader extends URLClassLoader {
             // HybridFix start - Allow child loading
             boolean hasChildren = !children.isEmpty();
             if (childLoadingEnabled && hasChildren) {
-                from = this;
-                for (ClassLoader child : children) {
-                    final String transformedName = transformName(name);
-
-                    try {
-                        final Class<?> clazz = (Class<?>) MD_FIND_CLASS.invoke(child, transformedName);
-                        if (clazz != null) {
-                            cachedClasses.put(name, clazz);
-                            from = null;
-                            return clazz;
+                from.set(this);
+                try {
+                    for (ClassLoader child : children) {
+                        final String transformedName = transformName(name);
+                        try {
+                            final Class<?> clazz = (Class<?>) MD_FIND_CLASS.invoke(child, transformedName);
+                            if (clazz != null) {
+                                cachedClasses.put(name, clazz);
+                                return clazz;
+                            }
+                        } catch (Exception ignored) {
                         }
-                    } catch (Exception e1) {
-                        from = null;
                     }
-
+                } finally {
+                    from.remove();
                 }
-                from = null;
             }
             if (childLoadingEnabled || !hasChildren) invalidClasses.add(name);
             // HybridFix end - Allow child loading
