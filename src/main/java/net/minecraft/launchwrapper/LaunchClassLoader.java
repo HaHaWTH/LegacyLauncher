@@ -125,6 +125,7 @@ public class LaunchClassLoader extends URLClassLoader {
             if (pluginDir.exists() && pluginDir.isDirectory()) {
                 File[] jars = pluginDir.listFiles((dir, name) -> dir.isFile() && name.toLowerCase(Locale.ROOT).endsWith(".jar"));
                 if (jars != null) {
+                    Arrays.sort(jars);
                     for (File jar : jars) {
                         try (JarFile jf = new JarFile(jar)) {
                             if (jf.getEntry("plugin.yml") == null) {
