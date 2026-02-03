@@ -114,7 +114,7 @@ public class LaunchClassLoader extends URLClassLoader {
     }
 
     // HybridFix start - Scan plugins for mixin support
-    private final Map<String, File> pluginClass2JarMap = new ConcurrentHashMap<>();
+    private final Map<String, File> pluginClass2JarMap = new HashMap<>();
     private volatile boolean pluginsScanned = false;
 
     private void scanPlugins() {
@@ -290,11 +290,11 @@ public class LaunchClassLoader extends URLClassLoader {
                     final String transformedName = transformName(name);
 
                     try {
-                        Class<?> classe = (Class<?>) MD_FIND_CLASS.invoke(child, transformedName);
-                        if (classe != null) {
-                            cachedClasses.put(name, classe);
+                        final Class<?> clazz = (Class<?>) MD_FIND_CLASS.invoke(child, transformedName);
+                        if (clazz != null) {
+                            cachedClasses.put(name, clazz);
                             from = null;
-                            return classe;
+                            return clazz;
                         }
                     } catch (Exception e1) {
                         from = null;
