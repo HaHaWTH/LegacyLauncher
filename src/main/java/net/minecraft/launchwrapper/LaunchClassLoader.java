@@ -116,12 +116,13 @@ public class LaunchClassLoader extends URLClassLoader {
     // HybridFix start - Scan plugins for mixin support
     private final Map<String, File> pluginClass2JarMap = new HashMap<>();
     private volatile boolean pluginsScanned = false;
+    private static final String PLUGIN_DIRECTORY = System.getProperty("legacy.pluginDirectory", "plugins");
 
     private void scanPlugins() {
         if (pluginsScanned) return;
         synchronized (pluginClass2JarMap) {
             if (pluginsScanned) return;
-            File pluginDir = new File(Launch.minecraftHome, "plugins");
+            File pluginDir = new File(Launch.minecraftHome, PLUGIN_DIRECTORY);
             if (pluginDir.exists() && pluginDir.isDirectory()) {
                 File[] jars = pluginDir.listFiles((dir, name) -> dir.isFile() && name.toLowerCase(Locale.ROOT).endsWith(".jar"));
                 if (jars != null) {
